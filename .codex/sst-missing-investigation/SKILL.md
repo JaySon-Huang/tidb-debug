@@ -15,6 +15,7 @@ Analyze missing SST errors by correlating TiFlash FATAL logs, TiKV compaction/re
 - Normalize time: s3clean timestamps are UTC+0 unless stated; convert to +08:00 when comparing.
 - Check HA chaos windows and TiKV restarts (look for "Welcome to TiKV" and preceding error burst).
 - Build a timeline and evidence section with exact file:line and raw log lines.
+- Log phase conclusions into `investigate.md`, then use that as the base for deeper follow-up queries.
 
 ## Quick Start
 1. Ensure logs exist in the analysis directory (use `copy-logs-from-k8s` skill if needed).
@@ -84,4 +85,5 @@ Analyze missing SST errors by correlating TiFlash FATAL logs, TiKV compaction/re
   - per-pod shard/region mapping
   - timeline (with timestamps)
   - evidence logs (file+line + raw content)
+  - phase conclusions (when a partial answer is ready)
 - Create translations (e.g., `investigate.chinese.md`) when requested.
