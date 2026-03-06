@@ -8,6 +8,10 @@
   - A skill and scripts for downloading component logs from TCMS/Kubernetes clusters.
 - `.agents/tcms-env/`
   - A skill for parsing `.env` / `kubeconfig.yml`, extracting DSNs, building TCMS URLs, and checking cluster health.
+- `.agents/tidb-system-table-sql/`
+  - A skill for querying TiDB system tables and cluster metadata with a troubleshooting-focused SQL cookbook.
+- `.agents/tidb-log-triage/`
+  - A skill for quickly triaging TiDB/TiKV/TiFlash incidents using high-signal log patterns and Loki filters.
 
 ## How To Use These Skills
 
