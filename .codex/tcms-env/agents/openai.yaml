@@ -1,0 +1,4 @@
+interface:
+  display_name: "TCMS Env"
+  short_description: "Check pod health, parse env, and query versions"
+  default_prompt: "Use $tcms-env to validate .env/kubeconfig.yml, check abnormal pods, extract TESTBED/DSNs/TCMS URL, and optionally query cluster component versions."
