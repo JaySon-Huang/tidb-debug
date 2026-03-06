@@ -4,10 +4,10 @@
 
 ## Repository Layout
 
+- `.agents/tcms-env/`
+  - A skill for parsing TCMS clusters' `.env` / `kubeconfig.yml` files, extracting DSNs, building TCMS URLs, and checking cluster health.
 - `.agents/tcms-download-logs/`
   - A skill and scripts for downloading component logs from TCMS/Kubernetes clusters.
-- `.agents/tcms-env/`
-  - A skill for parsing `.env` / `kubeconfig.yml`, extracting DSNs, building TCMS URLs, and checking cluster health.
 - `.agents/tidb-system-table-sql/`
   - A skill for querying TiDB system tables and cluster metadata with a troubleshooting-focused SQL cookbook.
 - `.agents/tidb-log-triage/`
