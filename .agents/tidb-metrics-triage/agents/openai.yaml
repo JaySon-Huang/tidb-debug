@@ -1,0 +1,4 @@
+interface:
+  display_name: "TiDB Metrics Triage"
+  short_description: "Inspect high-signal TiDB and TiFlash metrics"
+  default_prompt: "Use $tidb-metrics-triage to identify the first Prometheus metrics to inspect for this TiDB or TiFlash incident."
