@@ -6,19 +6,19 @@ description: Triage TiDB/TiKV/TiFlash incidents by locating high-signal Promethe
 # TiDB Metrics Triage
 
 ## Workflow
-1. 先确认故障组件和实例映射，避免把 `tidb-server`、`tiflash`、`tiflash-proxy`、`node-exporter` 的指标混在一起看。
-2. 打开 `references/key-metric-signals.md`，按“场景”挑最少的一组关键 metrics。
-3. 先看同一时间窗口里的峰值和共振，再看是否需要补日志或代码。
-4. 输出结构化结论：`命中 metrics`、`可以支撑什么判断`、`还缺什么证据`、`下一步排查动作`。
+1. First confirm the failing component and instance mapping so you do not mix metrics from `tidb-server`, `tiflash`, `tiflash-proxy`, and `node-exporter`.
+2. Open `references/key-metric-signals.md` and choose the smallest high-signal metric set for the current scenario.
+3. Check peaks and co-movement within the same time window first, then decide whether logs or code-level evidence need to be added.
+4. Output a structured conclusion: `matched metrics`, `what they support`, `what evidence is still missing`, and `next investigation steps`.
 
 ## Quick Navigation
-- TiFlash proxy 内存暴涨：`tiflash_proxy_process_resident_memory_bytes`、`tiflash_proxy_tikv_server_mem_trace_sum{name="raftstore-entry_cache"}`
-- `wait-index` / `ready` 恶化：`tiflash_raft_wait_index_duration_seconds_sum/count`、`tiflash_proxy_tikv_raftstore_raft_process_duration_secs_sum/count{type="ready"}`
-- 数据盘映射：`node_disk_info`、`node_filesystem_size_bytes`、`node_filesystem_avail_bytes`
-- 数据盘 I/O 背压：`node_disk_io_now`、`node_disk_*_bytes_total`、`node_disk_*_completed_total`、`node_disk_*_time_seconds_total`
+- TiFlash proxy RSS surge: `tiflash_proxy_process_resident_memory_bytes`, `tiflash_proxy_tikv_server_mem_trace_sum{name="raftstore-entry_cache"}`
+- `wait-index` / `ready` degradation: `tiflash_raft_wait_index_duration_seconds_sum/count`, `tiflash_proxy_tikv_raftstore_raft_process_duration_secs_sum/count{type="ready"}`
+- Data-disk mapping: `node_disk_info`, `node_filesystem_size_bytes`, `node_filesystem_avail_bytes`
+- Data-disk I/O backpressure: `node_disk_io_now`, `node_disk_*_bytes_total`, `node_disk_*_completed_total`, `node_disk_*_time_seconds_total`
 
 ## Safety Notes
-- metrics 用于快速收敛方向，不等同于根因结论。
-- 对 `sum/count` 型指标，优先看同一窗口的增量或速率，不要直接比较累计值本身。
-- 磁盘高压最多只能先支撑“放大器”或“重要支撑项”，不能单凭它直接确认 `applied index` 推进慢的因果。
-- 如果需要把 metrics 判断写成更强结论，补 `tidb-log-triage` 里的关键日志做交叉验证。
+- Metrics are for quickly narrowing the direction; they are not equivalent to a root-cause conclusion.
+- For `sum/count` metrics, prefer increments or rates within the same window rather than comparing the raw cumulative values.
+- Disk pressure can at most support an "amplifier" or "important supporting factor" interpretation; by itself it cannot prove causality for slow `applied index` advancement.
+- If you need to write a stronger conclusion from metrics, cross-check against the key logs in `tidb-log-triage`.

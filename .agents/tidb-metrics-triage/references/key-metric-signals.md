@@ -1,52 +1,52 @@
 # Key Metric Signals for TiDB Incident Triage
 
-## 1) TiFlash proxy RSS 暴涨，先判断是不是 `raftstore-entry_cache`
-- 场景：`tiflash-proxy` RSS 快速上升，怀疑内存驻留在 proxy 内部而不是 TiFlash 主进程。
-- 第一优先 metrics：
+## 1) If TiFlash proxy RSS surges, first determine whether `raftstore-entry_cache` is involved
+- Scenario: `tiflash-proxy` RSS rises quickly, and you suspect the memory is resident inside the proxy rather than the TiFlash main process.
+- Highest-priority metrics:
   - `tiflash_proxy_process_resident_memory_bytes`
   - `tiflash_proxy_tikv_server_mem_trace_sum{name="raftstore-entry_cache"}`
-- 解读要点：
-  - 先用 `tiflash_proxy_process_resident_memory_bytes` 确认 RSS 暴涨主体就是 `tiflash-proxy`。
-  - 如果 `raftstore-entry_cache` 和 proxy RSS 在同一时间带一起上升，且量级本身足够大，应优先沿 `raft entry` 驻留路径继续查。
-  - 这能直接支撑“proxy 内存上涨与 `entry_cache` 强相关”，但还不能单独区分是 cache 本体涨了，还是已送给 apply 的 entry 迟迟未释放。
-- 下一步排查：
-  - 对齐 `wait-index`、`ready` 的同窗口变化。
-  - 补 `apply.rs:737`、`ReadIndex.cpp:119`、`MPPTask.cpp:647` 等日志。
-  - 不要直接把它写成“内存泄漏”；先写成“内存驻留量异常增加”。
+- Interpretation:
+  - First use `tiflash_proxy_process_resident_memory_bytes` to confirm that the process with the RSS surge is indeed `tiflash-proxy`.
+  - If `raftstore-entry_cache` and proxy RSS rise together in the same time window, and the magnitude is large enough, prioritize investigating the `raft entry` residency path.
+  - This directly supports the statement that proxy memory growth is strongly correlated with `entry_cache`, but metrics alone still cannot distinguish whether the cache itself is growing or entries already handed to apply are not being released promptly.
+- Next steps:
+  - Align same-window changes in `wait-index` and `ready`.
+  - Add logs such as `apply.rs:737`, `ReadIndex.cpp:119`, and `MPPTask.cpp:647`.
+  - Do not write this up directly as a "memory leak"; start with "abnormal increase in memory residency".
 
-## 2) `wait-index` 与 `ready` 同时变坏，优先怀疑 learner 侧消费变慢
-- 场景：查询抖动、TiFlash learner read 变慢、proxy 内存同时抬升。
-- 第一优先 metrics：
+## 2) If `wait-index` and `ready` deteriorate together, first suspect slower consumption on the learner side
+- Scenario: query jitter appears, TiFlash learner reads slow down, and proxy memory rises at the same time.
+- Highest-priority metrics:
   - `tiflash_raft_wait_index_duration_seconds_sum{type="tmt_raft_wait_index_duration"}`
   - `tiflash_raft_wait_index_duration_seconds_count{type="tmt_raft_wait_index_duration"}`
   - `tiflash_proxy_tikv_raftstore_raft_process_duration_secs_sum{type="ready"}`
   - `tiflash_proxy_tikv_raftstore_raft_process_duration_secs_count{type="ready"}`
-- 解读要点：
-  - 用同一时间窗口的 `sum` 增量除以 `count` 增量，得到窗口平均耗时；不要直接拿累计值本身比较。
-  - 如果 `wait-index` 和 `ready` 在同一异常时间带一起抬升，再叠加 `entry_cache` / proxy RSS 上升，更支持沿 `ready -> apply -> compact` 这一侧继续查。
-  - 这能支撑“消费变慢或落后”，但还不能仅凭 metrics 直接写成某个单独 region 的根因。
-- 下一步排查：
-  - 查 `ReadIndex.cpp:119 wait learner index timeout`。
-  - 查 `MPPTask.cpp:647 Region unavailable ... applied_index=...`。
-  - 查 `apply.rs:737 [store ...] handle ready ... committed entries`。
+- Interpretation:
+  - Divide the same-window delta of `sum` by the delta of `count` to get window-average latency; do not compare the raw cumulative values directly.
+  - If `wait-index` and `ready` rise together in the same anomalous window, and `entry_cache` / proxy RSS also increases, that more strongly supports continuing along the `ready -> apply -> compact` line of investigation.
+  - This supports "consumption is slower or lagging", but metrics alone still cannot justify writing that a single region is the root cause.
+- Next steps:
+  - Check `ReadIndex.cpp:119 wait learner index timeout`.
+  - Check `MPPTask.cpp:647 Region unavailable ... applied_index=...`.
+  - Check `apply.rs:737 [store ...] handle ready ... committed entries`.
 
-## 3) 先确认异常数据盘是谁，不要把系统盘和数据盘混看
-- 场景：想讨论磁盘压力，但还没搞清楚 `/data` 到底对应哪个 block device。
-- 第一优先 metrics：
+## 3) Identify the anomalous data disk first; do not mix system-disk and data-disk signals
+- Scenario: you want to discuss disk pressure, but you have not yet confirmed which block device `/data` actually maps to.
+- Highest-priority metrics:
   - `node_disk_info`
   - `node_filesystem_size_bytes`
   - `node_filesystem_avail_bytes`
-- 解读要点：
-  - 先通过 `node_filesystem_*` 确认挂载点到 device 的映射，例如 `/data -> /dev/sdb1`。
-  - 再通过 `node_disk_info` 看设备型号、总线、路径，避免把 SATA SSD 和 NVMe 混为一谈。
-  - 只有先确认“哪个盘是数据盘”，后面的 `node_disk_*` 压力分析才有意义。
-- 下一步排查：
-  - 固定住数据盘 device 名称后，再看该 device 的 `io_now`、带宽、时延。
-  - 如果存在多块数据盘，不要只盯着 `sda` 或根分区。
+- Interpretation:
+  - First use `node_filesystem_*` to confirm the mount-point-to-device mapping, for example `/data -> /dev/sdb1`.
+  - Then use `node_disk_info` to inspect device model, bus, and path so that SATA SSD and NVMe are not conflated.
+  - Only after confirming which disk is the data disk does later `node_disk_*` pressure analysis become meaningful.
+- Next steps:
+  - After fixing the data-disk device name, inspect `io_now`, throughput, and latency for that device.
+  - If multiple data disks exist, do not focus only on `sda` or the root partition.
 
-## 4) 数据盘 I/O 背压：重要支撑项，不是单独因果证据
-- 场景：怀疑 `applied index` 推进慢、learner read 超时、ready/apply 变慢与磁盘背压有关。
-- 第一优先 metrics：
+## 4) Data-disk I/O backpressure: important supporting evidence, not standalone causal proof
+- Scenario: you suspect slow `applied index` advancement, learner read timeouts, or slower ready/apply processing may be related to disk backpressure.
+- Highest-priority metrics:
   - `node_disk_io_now`
   - `node_disk_read_bytes_total`
   - `node_disk_written_bytes_total`
@@ -54,32 +54,32 @@
   - `node_disk_writes_completed_total`
   - `node_disk_read_time_seconds_total`
   - `node_disk_write_time_seconds_total`
-- 解读要点：
-  - `node_disk_io_now` 直接反映当前排队深度，是最直观的背压信号。
-  - `read/write_time_seconds_total` 对 `reads/writes_completed_total` 做同窗口增量相除，可估算平均读写时延。
-  - 如果同一数据盘在异常窗口里同时出现高 `io_now`、持续毫秒级时延、高带宽，就可以把“磁盘 I/O 背压”写成重要支撑项。
-  - 但单凭磁盘高压，不能直接写成“已经证明 `applied index` 推进慢就是磁盘导致的”。
-- 下一步排查：
-  - 必须与 `wait-index`、`ready`、`entry_cache`、proxy RSS 同时段对齐。
-  - 再去日志里确认是否出现 `wait learner index timeout`、`Region unavailable`、大 batch `handle ready`。
-  - 如果这些信号共振，才可以把磁盘背压写成“很可能的放大器”。
+- Interpretation:
+  - `node_disk_io_now` directly reflects current queue depth and is the most intuitive backpressure signal.
+  - Divide the same-window delta of `read/write_time_seconds_total` by the delta of `reads/writes_completed_total` to estimate average read/write latency.
+  - If the same data disk shows high `io_now`, sustained millisecond-level latency, and high throughput in the anomalous window, you can write disk I/O backpressure as an important supporting factor.
+  - But disk pressure alone still cannot prove that slow `applied index` advancement is caused by disk.
+- Next steps:
+  - Align it with `wait-index`, `ready`, `entry_cache`, and proxy RSS over the same period.
+  - Then confirm in logs whether `wait learner index timeout`, `Region unavailable`, or large-batch `handle ready` appears.
+  - Only when these signals move together should disk backpressure be described as a likely amplifier.
 
-## 5) 写结构化结论时的推荐句式
-- 可以直接写：
-  - “`tiflash_proxy_tikv_server_mem_trace_sum{name="raftstore-entry_cache"}` 与 proxy RSS 在同一时间带一起上升，是当前最强的 proxy 内存解释信号。”
-  - “`wait-index` 和 `ready` 的同窗口恶化，支撑继续沿 learner 侧消费变慢这条线查。”
-  - “数据盘 I/O 背压可以作为 `applied index` 推进变慢的重要支撑项或放大器。”
-- 不建议直接写：
-  - “已经确认内存泄漏。”
-  - “已经确认某个单独 region 就是根因。”
-  - “只凭磁盘 util 高，就已经证明 `applied index` 推进慢是磁盘导致的。”
+## 5) Recommended wording for structured conclusions
+- You can write directly:
+  - "`tiflash_proxy_tikv_server_mem_trace_sum{name=\"raftstore-entry_cache\"}` and proxy RSS rise together in the same time window; this is currently the strongest signal explaining proxy memory growth."
+  - "`wait-index` and `ready` deteriorate in the same window, which supports continuing along the learner-side slow-consumption line of investigation."
+  - "Data-disk I/O backpressure can be written as an important supporting factor or amplifier for slow `applied index` advancement."
+- Avoid writing directly:
+  - "Memory leak has been confirmed."
+  - "A single region has been confirmed as the root cause."
+  - "High disk util alone already proves that slow `applied index` advancement is caused by disk."
 
-## 6) 典型输出结构
-- 命中 metrics：
-  - 列出 exact metric name 和实例。
-- 当前能支撑的判断：
-  - 明确写“支撑项”“高相关”“更值得继续查的主线”。
-- 当前还不能确认的点：
-  - 明确写缺少哪类日志、代码或 region 级证据。
-- 下一步排查动作：
-  - 指向 `tidb-log-triage` 里的具体关键词，或继续缩小到单个实例 / region / 磁盘。
+## 6) Typical output structure
+- Matched metrics:
+  - List the exact metric names and instances.
+- What the current evidence supports:
+  - Explicitly label supporting factors, strong correlation, or the main line that is most worth continuing to investigate.
+- What is still unconfirmed:
+  - Explicitly state what logs, code evidence, or region-level evidence are still missing.
+- Next investigation steps:
+  - Point to concrete keywords in `tidb-log-triage`, or continue narrowing to a single instance, region, or disk.
