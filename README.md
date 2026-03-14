@@ -1,9 +1,11 @@
 # tidb-debug
 
-`tidb-debug` is a repository for documenting and reusing TiDB/TiKV/TiFlash debugging workflows. The current content mainly consists of reusable Codex skills and helper scripts.
+`tidb-debug` is a repository for documenting and reusing TiDB/TiKV/TiFlash debugging workflows. The current content mainly consists of reusable skills under `.agents/` and helper scripts for installing them into local agent toolchains.
 
 ## Repository Layout
 
+- `.agents/`
+  - Skill directories. Each installable skill lives at `.agents/<skill-name>/SKILL.md`.
 - `.agents/tcms-env/`
   - A skill for parsing TCMS clusters' `.env` / `kubeconfig.yml` files, extracting DSNs, building TCMS URLs, and checking cluster health.
 - `.agents/tcms-download-logs/`
@@ -19,31 +21,31 @@
 2. Follow the workflow in the corresponding `SKILL.md`.
 3. Keep investigation notes and conclusions in your current debugging directory.
 
-## Skill Installation Guide (Codex)
+## Sync Skills Into Local Tooling
 
-The following commands use the built-in `skill-installer`:
+This repository includes helper scripts for symlinking every skill under `.agents/` into the standard global skill directories used by Claude, OpenCode, and Codex.
 
 ```bash
-CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-SKILL_INSTALLER="$CODEX_HOME/skills/.system/skill-installer/scripts"
+./sync-skills.sh
 ```
 
-1. List installable curated skills:
+This creates links in:
+
+- `~/.claude/skills/`
+- `~/.config/opencode/skills/`
+- `${CODEX_HOME:-~/.codex}/skills/`
+
+To remove only the symlinks created by this repository:
 
 ```bash
-python3 "$SKILL_INSTALLER/list-skills.py"
-```
-
-2. Install from any GitHub repository path (example):
-
-```bash
-python3 "$SKILL_INSTALLER/install-skill-from-github.py" \
-  --url https://github.com/<owner>/<repo>/tree/<ref>/<path-to-skill>
+./unsync-skills.sh
 ```
 
 Notes:
-- The default install destination is `$CODEX_HOME/skills/<skill-name>` (usually `~/.codex/skills/<skill-name>` if `CODEX_HOME` is not set).
-- Restart Codex after installation to load new skills.
+- The scripts scan `.agents/*/SKILL.md`.
+- Existing non-symlink entries are left untouched.
+- Existing symlinks that do not point back into this repository are skipped.
+- Restart Codex, Claude, or OpenCode after syncing if the new skills do not appear immediately.
 
 ## License
 
